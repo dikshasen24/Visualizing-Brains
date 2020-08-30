@@ -1,0 +1,416 @@
+# GLIOBLASTOMA DATA
+
+# NOTE: Remember to change your working directory to the appropriate folders before running a particular section of code!!
+
+### DATA STRUCTURES AND OPERATIONS
+
+# Exploring DICOM Format, its components,and combining DICOM images for better resolution
+
+# manually set working directory to Patient1 ->1991->FLAIR
+
+library(oro.dicom)
+
+# arbitarily picked 11th image to read- represents one axial slice of brain
+slice = readDICOM("1-11.dcm")
+
+class(slice)
+
+# readDICOM functions reads as a list with 2 components -img and DICOM header
+# so the class is 'list'
+# DICOM hdr=dataframe, image=matrix
+# let's check these facts
+
+names(slice)
+# confirms the 2 components
+
+class(slice$hdr)
+class(slice$hdr[[1]])
+# slice$hdr itsel is a list, but the first element of hdr is a dataframe
+
+class(slice$img)
+class(slice$img[[1]])
+dim(slice$img[[1]])
+# slice$img is a list, but first element of img is a matrix
+# dimension of image is 320*260 pixels
+
+# let's take a look at the IMAGE component
+# use transpose function (t) to transpose matrix for plotting
+# then plot using image function
+# we created d so that we can specify the dimensions of the image in x and y direction
+# grayscale image 
+
+d = dim(t(slice$img[[1]]))
+image(1:d[1],1:d[2],t(slice$img[[1]]), col = gray(0:64/64))
+
+# Analyzing this image
+
+# let us see a particular point in the image- refer to google doc
+slice$img[[1]][101:105,121:125]
+
+# plot density histogram for entire image
+hist(slice$img[[1]][,],breaks = 50, xlab = "FLAIR",prob = T,col = rgb(0,0,1,1/4),main = "")
+
+# let's take a look at the DICOM HEADER COMPONENT
+
+hdr = slice$hdr[[1]]
+
+names(hdr)
+# components of header - name and value are most imp
+
+hdr$name
+# 137 subsets under this header 
+
+# consider subset 'PixelSpacing' under hdr and extract value
+hdr[hdr$name == "PixelSpacing","value"]
+# means that each pixel in the image has the dimension 0.6875 mm*0.6875 mm
+# basically the resolution of our image
+
+hdr[hdr$name == "FlipAngle",]
+# image aquisition parameter - need to report when writing a paper
+# sort of a classification. Here value = 150
+
+# Now we want to read entire brain data, not just one slice of it
+# set working directory to Patient 1 -> 1991
+
+# we are reading entire folder(all slices) instead of just one image(one slice)
+all_slices_T1 = readDICOM("10008.000000-T1prereg-91470/")
+
+# take 11th image
+dim(all_slices_T1$img[[11]])
+# dimension is 320*260 - normally would expect this to have more dimension than previous
+# however not observed here
+
+hdr = all_slices_T1$hdr[[11]]
+hdr[hdr$name == "PixelSpacing","value"]
+# means that each pixel in the image has the dimension 0.6875 mm*0.6875 mm
+# same resolution as before since pixel spacing remains the same 
+
+
+### The NifTI FORMAT
+# Convert DICOM to NIfTI format, plot a slice of the brain, store nifty object in a new folder
+
+# data is better read in NifTI format
+# NIfTI stores all brain slices SEPARATELY in one folder, does NOT combine them to form one brain
+# let us convert above DICOM images to NifTI format
+
+nii_T1 = dicom2nifti(all_slices_T1)
+
+d = dim(nii_T1);d; class(nii_T1)
+# 260*320*25 = 25 slices of brain altogether!
+# class is nifti
+
+image(1:d[1],1:d[2],nii_T1[,,11],col= gray(0:64/64), xlab= "", ylab="")
+# plot 11th slice of array
+
+library(oro.nifti)
+
+# now we have to save file that we just converted from DICOM->NIfTI in a new folder
+
+# create a new folder/file, name = Output_3D_File
+fname = "Output_3D_File"
+
+# move nifty object (nim) 'nii_T1' into file that we just created
+writeNIfTI(nim = nii_T1, filename = fname)
+
+# check if 'Output_3d_File' has been stored correctly
+list.files(getwd(), pattern = "Output_3D_File")
+# it has been saved as a nifti folder (nii.gz)
+# has been created successfully
+
+list.files(getwd(), pattern = "T")
+# has both T1 and T2
+# let us read T2 as well
+
+# just like before, read T2 as dicom and then convert to nifti
+
+all_slices_T2 = readDICOM("37910.000000-T2reg-84816/")
+nii_T2 = dicom2nifti(all_slices_T2)
+dim(nii_T2)
+# dim = 260*320*25 = same as T1
+
+
+### BASIC VISUALIZATION 
+# visualizing brain using image function(rgb), oro.nifti functions(greyscale), orthographic view,
+# intensity histogram, back mapping on slices+orthographic back mapping to show areas of specific intensities in brain  
+
+# Let us visualize the nifty object nii_T1
+
+print({nii_T1 = readNIfTI(fname = fname)}) 
+# gives us an overall summary of the nifti object
+
+# let us visualize one brain slice using image function
+
+image(1:d[1], 1:d[2], nii_T1[,,11],xlab ="", ylab = "")
+# 1:d1 and 1:d2 basically means that we are plotting all values from 1-260 and 1-320 
+# both rows and columns since dimension of image is 260*320*25
+# we have subsetted the plot to slice 11
+# red area = area with low instensity(black), yellow area = area with high intensity(white)
+
+# it is cumbersome to mention dimensions every single time we plot
+# specialized function just to plot nifti objects
+# exampe = slice 11 
+image(nii_T1, z=11, plot.type = "single")
+
+# visualize all slices!
+image(nii_T1)
+
+# Another way to visualize - Orthographic View
+# shows all 3 planes of the brain (Coronal, Sagittal, Axial) 
+orthographic(nii_T1, xyz = c(100,120,11))
+# axial=bottom, sagittal=upper right, coronal=upper left
+# the numbers specify the point where xyz axes meet (pixels 100*150 of 11th slice)
+
+# NOTE - all oro.nifti functions will plot grayscale images by default
+
+# Visualizing all slices using histogram
+
+par(mfrow=c(1,2));
+o<-par(mar=c(4,4,0,0))
+
+hist(nii_T1, breaks=75,prob=T,xlab="T1 Intensities", col=rgb(0,0,1,1/2),main="");
+
+hist(nii_T1[nii_T1>50],breaks=75,prob=T,xlab="T1 Intensities>50", col=rgb(0,0,1,1/2),main="")
+ 
+# first 2 codes basically telling R that we want 2 histograms side by side
+# This is called BACK MAPPING (using analysis of one plot to make a better plot with signifocant results)
+
+## Back Mapping one slice
+
+is_btw_300_400 <- ((nii_T1>300) & (nii_T1<400))
+# if intensity between 301-399, then true (include). Otherwise, false (do not include)
+
+nii_T1_mask <- nii_T1
+# just copying nifty object over to here, so that we can have both red and grey in same image
+
+nii_T1_mask[!is_btw_300_400]=NA
+# if intensity between 301-399, then keep. Scrap out everything else
+
+overlay(nii_T1, nii_T1_mask,z=11, plot.type = "single")
+# plot 11th slice. If intensity between 301-399 then red. Otherwise, greyscale
+
+## Back Mapping all Slices
+
+overlay(nii_T1, nii_T1_mask)
+
+## Orthographic Backmapping
+orthographic(nii_T1,nii_T1_mask,xyz=c(100,120,11),text="Image overlaid with mask",text.cex=1.5)
+
+### BASIC DATA MANIPULATION
+# subtracting 2 scans taken some time apart for same person - highlights differences 
+
+### converting the required DICOM files tio NIFTI format 
+ 
+library(oro.nifti)
+
+#### THIS NEXT MODULE IS BEING DONE ON PATIENT 2 
+
+# baseline scan
+all_slices_scan1 = readDICOM("11.000000-T1post-73420/")
+nii_scan1 = dicom2nifti(all_slices_scan1)
+dim(nii_scan1)
+
+# create a new folder/file
+scan1fname = "scan1_file"
+
+# move nifty object (nim) 'nii_scan1' into file that we just created
+writeNIfTI(nim = nii_scan1, filename = scan1fname)
+
+T1 <- readNIfTI(scan1fname,reorient=FALSE)
+
+# follow up scan 
+all_slices_scan2 = readDICOM("12.000000-T1post-05670/")
+nii_scan2 = dicom2nifti(all_slices_scan2)
+dim(nii_scan2)
+
+# create a new folder/file
+scan2fname = "scan2_file"
+
+# move nifty object (nim) 'nii_scan1' into file that we just created
+writeNIfTI(nim = nii_scan2, filename = scan2fname)
+
+
+## Subtracting scans of patient 2, taken 90 days apart 
+
+library(fslr)
+
+# getting data of the scans 
+# scan 1
+basefile <- "scan1_file.nii.gz"
+basefname <- file.path(getwd(), basefile)
+#download.file(baseurl, basefile,mode="wb")
+
+# scan 2
+followfile <- "scan2_file.nii.gz"
+followfname <- file.path(getwd(), followfile)
+#download.file(followurl, followfile,mode="wb")
+
+# read initial scan 
+T1.base <- readNIfTI(basefname, reorient=FALSE)
+
+# read followup scan taken some time later, same visit
+T1.follow <- readNIfTI(followfname, reorient=FALSE)
+
+# subtract both images to get difference between the two
+# niftiarr makes sure both matrices are compatible with each other
+subtract.T1 <- niftiarr(T1, T1.follow - T1.base)
+
+# view the difference in orthographic view
+orthographic(subtract.T1)
+
+## Interesting to see all the change that happened in 90 days time for patient 2 
+
+## NOW LET US SEE CHANGE FOR PATIENT 20
+
+### converting the required DICOM files tio NIFTI format 
+ 
+library(oro.nifti)
+
+# baseline scan
+all_slices_scan1_20 = readDICOM("11.000000-T1post-92351/")
+nii_scan1_20 = dicom2nifti(all_slices_scan1_20)
+dim(nii_scan1_20)
+
+# create a new folder/file
+scan1fname20 = "scan1_file_20"
+
+# move nifty object (nim) 'nii_scan1' into file that we just created
+writeNIfTI(nim = nii_scan1_20, filename = scan1fname20)
+
+T1_20 <- readNIfTI(scan1fname20,reorient=FALSE)
+
+# follow up scan
+all_slices_scan2_20 = readDICOM("11.000000-T1post-88240/")
+nii_scan2_20 = dicom2nifti(all_slices_scan2_20)
+dim(nii_scan2_20)
+
+# create a new folder/file
+scan2fname20 = "scan2_file_20"
+
+# move nifty object (nim) 'nii_scan1' into file that we just created
+writeNIfTI(nim = nii_scan2_20, filename = scan2fname20)
+
+
+## Subtracting scans of patient 20, taken 90 days apart
+
+library(fslr)
+
+# getting data of the scans
+# scan 1
+basefile <- "scan1_file_20.nii.gz"
+basefname <- file.path(getwd(), basefile)
+#download.file(baseurl, basefile,mode="wb")
+
+# scan 2
+followfile <- "scan2_file_20.nii.gz"
+followfname <- file.path(getwd(), followfile)
+#download.file(followurl, followfile,mode="wb")
+
+# read initial scan 
+T1.base_20 <- readNIfTI(basefname, reorient=FALSE)
+
+# read followup scan taken some time later, same visit
+T1.follow_20 <- readNIfTI(followfname, reorient=FALSE)
+
+# subtract both images to get difference between the two
+# niftiarr makes sure both matrices are compatible with each other
+subtract.T1_20 <- niftiarr(T1_20, T1.follow_20 - T1.base_20)
+
+# view the difference in orthographic view of Patient 20 VS Patient 2
+orthographic(subtract.T1_20)
+orthographic(subtract.T1)
+
+## Interesting to see all the change that happened in 90 days time for patient 20
+
+### TRANSFORMATIONS AND SMOOTHING
+# how to transform images so that features are more clearly visible
+# monotonic transformations - linear transfer and linear spline transformations
+# plot a log-scale histogram with original and transformed intensities + view difference between original and transformed image
+# smoothen an image to reduce noise - gaussian smoothing
+
+library(oro.nifti)
+
+# plot the 11th slice of the T1 file
+image(T1,z=11,plot.type="single")
+
+# Log-scale histogram 	
+# Intensity on X-axis and the number of occurences of that intensity (in log scale) on Y-axis
+im_hist<-hist(T1,plot=FALSE)
+par(mar = c(5, 4, 4, 4) + 0.3)
+col1=rgb(0,0,1,1/2)
+plot(im_hist$mids,im_hist
+$count,log="y",type='h',lwd=10, lend=2,
+col=col1,xlab="Intensity Values",ylab="Count
+(Log Scale)" )
+
+# modify above histogram to transform intensities
+
+# Log-scale histogram with linear transfer function
+# red line = linear transfer function- takes the intensity values on X-axis and transforms them to the intensities on the y-axis on the right
+# this does not change the relative intensity of the image so not much change can be seen
+im_hist<-hist(T1,plot=FALSE)
+par(mar = c(5, 4, 4, 4) + 0.3)
+col1=rgb(0,0,1,1/2)
+plot(im_hist$mids,im_hist
+$count,log="y",type='h',lwd=10, lend=2,
+col=col1,xlab="Intensity Values",ylab="Count
+(Log Scale)" )
+par(new = TRUE)
+curve(x*1, axes = FALSE,xlab = "",ylab= "",
+col=2, lwd=3)
+axis(side=4,at = pretty(range(im_hist$mids))/
+max(T1), labels=pretty(range(im_hist$mids)))
+mtext("Original Intensity", side=4, line=2)
+
+# Define a different transfer function 
+# this transform function will take the intensities on the x-axis and transform them non-linearly
+# This defines a linear spline. Other definitions are possible
+# we can decide how many breaks/knots we want in the linear spline- in this case, we have 2 knots, 3 sections in the spline
+lin.sp<-function(x,knots,slope)
+{knots<-c(min(x),knots,max(x))
+slopeS<-slope[1]
+for(j in 2:length(slope)){slopeS<-c(slopeS,slope[j]-
+sum(slopeS))}
+rvals<-numeric(length(x))
+for(i in 2:length(knots))
+{rvals<-ifelse(x>=knots[i-1], slopeS[i-1]*(x-knots[i-1])+rvals,
+rvals)}
+return(rvals)}
+#Define a spline with two knots (0.3 and 0.6) and three slopes
+knot.vals<-c(.3,.6)
+slp.vals<-c(1,.5,.25)
+im_hist<-hist(T1,plot=FALSE)
+par(mar = c(5, 4, 4, 4) + 0.3)
+col1=rgb(0,0,1,1/2)
+plot(im_hist$mids,im_hist
+$count,log="y",type='h',lwd=10, lend=2,
+col=col1,xlab="Intensity Values",ylab="Count
+(Log Scale)" )
+par(new = TRUE)
+curve(lin.sp(x,knot.vals,slp.vals),axes=FALSE,xlab="",ylab="",col=2,lwd=3)
+axis(side=4,at = pretty(range(im_hist$mids))/
+max(T1),labels=pretty(range(im_hist$mids)))
+mtext("Transformed Intensity", side=4, line=2)
+
+# rename transformed intensity image (with linear splice tranformation) as trans_T1
+trans_T1<-lin.sp(T1, knot.vals*max(T1), slp.vals)
+
+# plot original image of slice 11 without transformation
+image(T1,z=11,plot.type='single', main="Original Image")
+
+# plot transformed image of slice 11 
+image(trans_T1,z=11,plot.type='single',main="Transformed Image")
+
+# Much better clarity than before!!
+
+## Smoothing by applying Gaussian smoothing 
+
+library(AnalyzeFMRI)
+
+# kernel size = 11, you can play around with kernel size values to check out different results
+smooth.T1 <- GaussSmoothArray(T1,voxdim=c(1,1,1),ksize=1,sigma=diag(3,3),mask=NULL,var.norm=FALSE)
+
+# get orthographic view of smoothened T1
+orthographic(smooth.T1)
+
+
+
