@@ -409,7 +409,7 @@ library(AnalyzeFMRI)
 # kernel size = 11, you can play around with kernel size values to check out different results
 smooth.T1 <- GaussSmoothArray(T1,voxdim=c(1,1,1),ksize=1,sigma=diag(3,3),mask=NULL,var.norm=FALSE)
 
-# get orthographic view of smoothened T1
+# get orthographic view of smooth image T1
 orthographic(smooth.T1)
 
 
